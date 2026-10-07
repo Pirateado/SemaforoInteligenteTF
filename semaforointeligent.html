@@ -1,0 +1,196 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Semáforo Inteligente · Av. Javier Prado</title>
+<style>
+:root{--bg:#0b1220;--card:#131c2e;--bd:#22304a;--tx:#e6edf7;--mu:#8ea0bd;--g:#22c55e;--a:#f59e0b;--r:#ef4444;--ac:#38bdf8}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px system-ui,sans-serif}
+header{padding:14px 20px;border-bottom:1px solid var(--bd)}h1{font-size:18px;margin:0}.mu{color:var(--mu);font-size:12px}
+main{display:grid;grid-template-columns:300px 1fr;gap:14px;padding:14px;max-width:1300px;margin:auto}@media(max-width:900px){main{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:14px}
+h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--mu);margin:0 0 10px}
+label{display:block;margin:8px 0 2px;font-size:12px;color:var(--mu)}
+select,input,button{width:100%;background:#0e1626;color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:7px}
+button{cursor:pointer;background:var(--ac);color:#04121f;font-weight:600;margin-top:8px}button.s{background:#1e2b44;color:var(--tx)}button:disabled{opacity:.5}
+.kp{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px}.kp div{background:#0e1626;border-radius:8px;padding:8px;text-align:center;font-size:11px;color:var(--mu)}.kp b{display:block;font-size:20px;color:var(--tx)}
+canvas{width:100%;display:block;border-radius:8px;background:#0e1626}.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+table{width:100%;border-collapse:collapse}th,td{padding:7px;text-align:right;border-bottom:1px solid var(--bd)}th:first-child,td:first-child{text-align:left}th{cursor:pointer;color:var(--mu);font-size:12px}
+.pos{color:var(--g)}.neg{color:var(--r)}.al{padding:6px 8px;margin:4px 0;border-left:3px solid var(--a);background:#1d1a10;border-radius:4px;font-size:12px}.al.ok{border-color:var(--g);background:#0f1d15}
+#bar{height:8px;background:#0e1626;border-radius:4px;overflow:hidden;margin-top:8px}#bi{height:100%;width:0;background:var(--ac)}#ml{font-size:12px;line-height:1.7}
+</style></head><body>
+<header><h1>🚦 Semáforo Inteligente · Cruce crítico Av. Javier Prado</h1><span class="mu">Agentes Inteligentes · USIL 2026 · Base vs Reflejo vs A* vs Híbrido (KNN + K-Means + A*)</span></header>
+<main>
+<aside>
+<div class="card"><h2>Parámetros</h2>
+<label>Escenario</label><select id="sc"><option value="valle">Valle (0,08/0,08)</option><option value="sim">Punta simétrica (0,20/0,20)</option><option value="asi" selected>Punta asimétrica (0,26/0,10)</option></select>
+<label>Configuración de la avenida</label><select id="ln"><option value="0">Simple · 1+1 carril</option><option value="1">Estándar · Javier Prado 2 + transversal 1</option><option value="2">Avenida amplia · 3 + 2</option><option value="3">Expresa + auxiliar · 4 + 2</option></select>
+<label>Modo (vista en vivo)</label><select id="md"><option value="0">Tiempos fijos 30/30</option><option value="1">Reflejo con estado</option><option value="2">Búsqueda A*</option><option value="3" selected>Híbrido ML + A*</option></select>
+<label>Verde mínimo (s)</label><input id="mg" type="number" value="10" min="5" max="40">
+<label>Verde máximo (s)</label><input id="xg" type="number" value="60" min="15" max="120">
+<label>K histéresis (reflejo)</label><input id="kk" type="number" value="1.2" step="0.1" min="1" max="4">
+<label>Horizonte A* (s)</label><input id="hh" type="number" value="40" step="5" min="10" max="60">
+<label>k de KNN</label><input id="kn" type="number" value="5" min="1" max="20">
+<label>Clústeres K-Means</label><input id="km" type="number" value="3" min="2" max="6">
+<label>Peso ML en el híbrido (0–1)</label><input id="ww" type="number" value="0.5" step="0.1" min="0" max="1">
+<label>Velocidad vista (pasos/s)</label><input id="sp" type="number" value="8" min="1" max="200">
+<button id="st">▶ Iniciar</button><button id="rs" class="s">Reiniciar</button><button id="go">Correr 30 semillas × 3 escenarios × 4 modos</button>
+<div id="bar"><div id="bi"></div></div><div class="mu" id="bt"></div></div>
+<div class="card"><h2>Alertas de hiperparámetros</h2><div id="al"></div></div>
+</aside>
+<section>
+<div class="card"><div class="kp"><div><b id="k1">0 s</b>tiempo</div><div><b id="k2">EO</b>fase</div><div><b id="k3">0,0 s</b>espera media</div><div><b id="k4">0</b>cola máx.</div></div>
+<canvas id="cv" width="800" height="460"></canvas></div>
+<div class="two"><div class="card"><h2>Cola total en vivo</h2><canvas id="c1" width="600" height="180"></canvas></div><div class="card"><h2>Espera media (30 semillas)</h2><canvas id="c2" width="600" height="180"></canvas></div></div>
+<div class="card"><h2>Módulo de Machine Learning</h2><div id="ml"></div></div>
+<div class="card"><h2>Comparación (clic en encabezado para ordenar)</h2>
+<table><thead><tr><th>Técnica</th><th data-k="w">Espera media (s)</th><th data-k="m">Cola máx.</th><th data-k="c">Cómputo/decisión (ms)</th><th data-k="imp">Mejora vs base</th><th data-k="win">Gana al base</th></tr></thead><tbody id="tb"><tr><td colspan="6" class="mu">Pulsa «Correr 30 semillas…» para llenar la tabla.</td></tr></tbody></table>
+<button id="rd" class="s">⬇ Descargar README.md con resultados</button></div>
+</section></main>
+<script>
+/* ÍNDICE (buscar etiquetas): [B0] utilidades · [B1] PEAS · [B2] ML: KNN + K-Means · [B3] entorno/simulación
+   [B4] agentes: base, reflejo · [B5] búsqueda A* · [B6] híbrido · [B7] experimentos 30 semillas · [B8] UI/README
+   PEAS = Performance, Environment, Actuators, Sensors (el enunciado decía "Percepción, Estado, Acciones, Sensor"). */
+
+// ===== [B0] UTILIDADES =====
+const $=id=>document.getElementById(id),V=id=>+$(id).value;
+const mean=a=>a.reduce((u,v)=>u+v,0)/a.length,sd=a=>{const m=mean(a);return Math.sqrt(mean(a.map(v=>(v-m)**2)))};
+function rng(s){return()=>{s|=0;s=s+0x6D2B79F5|0;let t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}} // mulberry32 con semilla
+const gauss=r=>Math.sqrt(-2*Math.log(r()+1e-12))*Math.cos(6.283185*r());
+const poisson=(l,r)=>{let L=Math.exp(-l),k=0,p=1;do{k++;p*=r()}while(p>L);return k-1};
+const d2=(a,b)=>(a[0]-b[0])**2+(a[1]-b[1])**2,near=(p,C)=>C.reduce((b,c,i)=>d2(p,c)<d2(p,C[b])?i:b,0);
+
+// ===== [B1] PEAS =====
+// Performance: minimizar espera media por vehículo (s) y cola máxima.  Environment: cruce de 2 ejes (0=Javier Prado E-O, 1=transversal), llegadas Poisson.
+// Actuators: mantener fase / cambiar fase (cuesta LOST=3 s de ámbar+todo-rojo).  Sensors: longitud de cola por eje (q) y llegadas por segundo.
+// [B3b] CONFIGURACIÓN DE AVENIDA: L = carriles por sentido de cada eje (EO, transversal) · M = multiplicador de demanda (más carriles → más tráfico)
+const RDS=[{n:'Simple 1+1',L:[1,1],M:[1,1]},{n:'Estándar 2+1',L:[2,1],M:[1.6,1]},{n:'Amplia 3+2',L:[3,2],M:[2.4,1.4]},{n:'Expresa+auxiliar 4+2',L:[4,2],M:[3.2,1.6]}];let RD=RDS[0];
+const SAT=.5,LOST=3,T=1800,DT=5; // SAT: veh/s que descargan en verde · T: 30 min simulados · DT: A* decide cada 5 s
+const SC={valle:{n:'Valle',l:[.08,.08],h:14,d:2},sim:{n:'Punta simétrica',l:[.20,.20],h:18,d:4},asi:{n:'Punta asimétrica',l:[.26,.10],h:8,d:1}};
+const MODES=['Tiempos fijos 30/30','Reflejo con estado','Búsqueda A*','Híbrido ML+A*'],SH=['Base','Reflejo','A*','Híbrido'];
+
+// ===== [B2] MACHINE LEARNING =====
+// Datos sintéticos "históricos": demanda (veh/s por eje) según hora y día, con ruido gaussiano 12 %.
+const prof=(h,d)=>{const s=d>=5?.6:1;return((h>=7&&h<=9)?[.26,.10]:(h>=17&&h<=20)?[.20,.20]:[.08,.08]).map(v=>v*s)};
+const lab=c=>c[0]+c[1]<.2?'Hora Valle':Math.abs(c[0]-c[1])>.08?'Punta Mañana (asim.)':'Punta Tarde/Noche (sim.)';
+function trainML(k,KM){
+ const r=rng(42),D=[];
+ for(let d=0;d<7;d++)for(let h=0;h<24;h++)for(let j=0;j<4;j++)D.push({h,d,y:prof(h,d).map(v=>Math.max(.01,v*(1+.12*gauss(r))))});
+ // --- Regresión KNN: distancia = hora circular + penalidad fin de semana + día; promedia los k vecinos ---
+ const knn=(h,d,S)=>{const n=S.map(e=>({e,x:Math.min(Math.abs(e.h-h),24-Math.abs(e.h-h))+2*((e.d>=5)!=(d>=5))+.3*Math.abs(e.d-d)})).sort((a,b)=>a.x-b.x).slice(0,k);return[0,1].map(i=>mean(n.map(z=>z.e.y[i])))};
+ const te=D.filter((_,i)=>i%7==0),tr=D.filter((_,i)=>i%7); // hold-out ~14 %
+ const mae=mean(te.map(e=>{const p=knn(e.h,e.d,tr);return(Math.abs(p[0]-e.y[0])+Math.abs(p[1]-e.y[1]))/2}));
+ // --- K-Means (inicio aleatorio con semilla + 25 iteraciones de Lloyd) sobre puntos (λ_EO, λ_T) ---
+ const P=D.map(e=>e.y);let C=[P[Math.floor(r()*P.length)]];
+ while(C.length<KM){let b=P[0],bd=-1;P.forEach(p=>{const m=Math.min(...C.map(c=>d2(p,c)));if(m>bd){bd=m;b=p}});C.push(b)} // el más lejano
+ for(let it=0;it<25;it++){const as=P.map(p=>near(p,C));C=C.map((c,i)=>{const m=P.filter((_,j)=>as[j]==i);return m.length?[0,1].map(a=>mean(m.map(p=>p[a]))):c})}
+ const pr=(h,d)=>knn(h,d,D);
+ return{mae,C,lab:C.map(lab),predict:pr,prior:(h,d)=>C[near(pr(h,d),C)]}; // prior = centroide del perfil al que pertenece la predicción
+}
+let ML,RES={};
+
+// ===== [B3] ENTORNO / SIMULACIÓN (1 paso = 1 s) =====
+const newSim=(sc,seed,mode)=>({sc,mode,L:RD.L,lam:sc.l.map((v,i)=>v*RD.M[i]),a:[0,0],r:rng(seed*7919+1),t:0,q:[0,0],p:0,g:0,lost:0,sat:0,ema:[.1*RD.M[0],.1*RD.M[1]],arr:0,qs:0,mx:0,ms:0,nd:0,out:0,hist:[],prior:ML.prior(sc.h,sc.d).map((v,i)=>v*RD.M[i])});
+function step(s,P){
+ // ESTADO INTERNO del agente: p (fase), g (s en verde), lost, ema (tasa de llegadas suavizada)
+ if(s.lost==0&&(s.mode<2||s.t%DT==0)){const t0=performance.now();const sw=decide(s,P);s.ms+=performance.now()-t0;s.nd++;if(sw){s.p^=1;s.g=0;s.lost=LOST}} // ACTUADOR
+ s.out=0;
+ if(s.lost>0)s.lost--;else{s.g++;s.sat+=SAT*s.L[s.p];while(s.q[s.p]>0&&s.sat>=1){s.q[s.p]--;s.sat--;s.out++}if(!s.q[s.p])s.sat=0}
+ for(let i=0;i<2;i++){const a=poisson(s.lam[i],s.r);s.a[i]=a;s.q[i]+=a;s.arr+=a;s.ema[i]+=.02*(a-s.ema[i])} // SENSOR: llegadas
+ s.qs+=s.q[0]+s.q[1];s.mx=Math.max(s.mx,s.q[0],s.q[1]);if(s.t%5==0)s.hist.push(s.q[0]+s.q[1]);s.t++;
+}
+
+// ===== [B4] AGENTES BASE Y REFLEJO =====
+function decide(s,P){
+ const p=s.p,o=1-p,q=s.q;
+ if(s.mode==0)return s.g>=30;                 // Modo base: ciclo fijo 30/30
+ if(s.g<P.minG)return false;                  // verde mínimo (todos los modos)
+ if(s.g>=P.maxG)return true;                  // verde máximo
+ if(s.mode==1){const pq=i=>q[i]+10*s.ema[i];  // Reflejo con estado: cola proyectada = cola + 10 s de tasa observada
+  return(q[p]==0&&q[o]>0)||pq(o)>P.K*pq(p)}   // histéresis K: solo cambia si la otra vía supera K veces a la actual
+ // ===== [B6] HÍBRIDO (modo 3): tasas = w·prior_ML + (1−w)·EMA observada → proactivo; modo 2 usa solo EMA (reactivo)
+ const rate=s.mode==3?[0,1].map(i=>P.w*s.prior[i]+(1-P.w)*s.ema[i]):s.ema;
+ return astar(q,p,s.g,rate,P,s.L)==1;
+}
+
+// ===== [B5] BÚSQUEDA A* =====
+// Nodo = (colas, fase, g, costo, profundidad, primera acción). Acciones: 0 mantener, 1 cambiar (si g≥mínimo).
+// Costo g(n) = Σ cola total por segundo (espera acumulada). h(n)=0 (admisible) ⇒ f=g. Meta: profundidad H/DT. Cola de prioridad = montículo.
+class Heap{constructor(){this.a=[]}push(x){const a=this.a;a.push(x);let i=a.length-1;while(i&&a[i].c<a[(i-1)>>1].c){const j=(i-1)>>1;[a[i],a[j]]=[a[j],a[i]];i=j}}
+ pop(){const a=this.a,t=a[0],l=a.pop();if(a.length){a[0]=l;let i=0;for(;;){let c=2*i+1;if(c+1<a.length&&a[c+1].c<a[c].c)c++;if(c<a.length&&a[c].c<a[i].c){[a[i],a[c]]=[a[c],a[i]];i=c}else break}}return t}get n(){return this.a.length}}
+function astar(q,p,g,rate,P,L){
+ const D=Math.max(1,Math.round(P.H/DT)),open=new Heap();let n=0;open.push({q:q.slice(),p,g,c:0,d:0,f:0});
+ while(open.n){const x=open.pop();if(x.d==D||++n>2000)return x.f; // meta o tope de nodos (acota el cómputo)
+  for(const a of[0,1]){if(a&&x.g<P.minG)continue;
+   const y={q:x.q.slice(),p:x.p,g:x.g,c:x.c,d:x.d+1,f:x.d?x.f:a};let lost=0;if(a){y.p^=1;y.g=0;lost=LOST}
+   for(let k=0;k<DT;k++){if(lost>0)lost--;else{y.g++;y.q[y.p]=Math.max(0,y.q[y.p]-SAT*L[y.p])}y.q[0]+=rate[0];y.q[1]+=rate[1];y.c+=y.q[0]+y.q[1]}
+   open.push(y)}}
+ return 0}
+
+// ===== [B7] EXPERIMENTOS (30 semillas, mismas llegadas para los 4 modos = números aleatorios comunes) =====
+const P=()=>({minG:V('mg'),maxG:V('xg'),K:V('kk'),H:V('hh'),k:V('kn'),KM:V('km'),w:V('ww')});
+async function runAll(){
+ const p=P();ML=trainML(p.k,p.KM);RD=RDS[V('ln')];$('go').disabled=true;let n=0;RES={};
+ for(const key in SC){RES[key]=MODES.map(()=>({w:[],m:[],c:[]}));
+  for(let seed=1;seed<=30;seed++){
+   for(let m=0;m<4;m++){const s=newSim(SC[key],seed,m);while(s.t<T)step(s,p);const o=RES[key][m];o.w.push(s.qs/s.arr);o.m.push(s.mx);o.c.push(s.ms/Math.max(1,s.nd));n++}
+   $('bi').style.width=(100*n/360)+'%';$('bt').textContent=`${SC[key].n} · semilla ${seed}/30 (${n}/360)`;
+   await new Promise(r=>setTimeout(r))}} // cede el hilo → la barra se repinta, la app no se congela
+ $('go').disabled=false;$('bt').textContent='Listo ✔';table()}
+let sortK=null;
+function table(){const R=RES[$('sc').value];if(!R)return;const b=mean(R[0].w);
+ const rows=R.map((r,i)=>({n:MODES[i],w:mean(r.w),s:sd(r.w),m:mean(r.m),c:mean(r.c),imp:100*(b-mean(r.w))/b,win:r.w.filter((v,j)=>v<R[0].w[j]).length}));
+ if(sortK)rows.sort((a,c)=>sortK=='imp'||sortK=='win'?c[sortK]-a[sortK]:a[sortK]-c[sortK]);
+ const best=Math.min(...rows.map(r=>r.w));
+ $('tb').innerHTML=rows.map(r=>`<tr${r.w==best?' style="background:#10261a"':''}><td>${r.n}</td><td>${r.w.toFixed(2)} ±${r.s.toFixed(2)}</td><td>${r.m.toFixed(1)}</td><td>${r.c.toFixed(3)}</td><td class="${r.imp>=0?'pos':'neg'}">${r.imp>=0?'+':''}${r.imp.toFixed(1)}%</td><td>${r.win}/30</td></tr>`).join('');
+ bars('c2',R.map(r=>mean(r.w)),SH)}
+
+// ===== [B8] UI: dibujo, alertas, README =====
+let live,run=false,acc=0,last=0,vis=[],VID=0;
+const reset=()=>{RD=RDS[V('ln')];live=newSim(SC[$('sc').value],1,V('md'));acc=0;vis=[]};
+// ===== [B9] CAPA VISUAL DE VEHÍCULOS (solo vista en vivo; no altera la simulación) =====
+// Cada auto nace al borde del lienzo (llegada), avanza hasta el final de la cola de su carril, espera, y al descargar (verde) cruza y sale.
+const LW=24,CC=['#38bdf8','#f472b6','#facc15','#a78bfa','#34d399','#fb923c','#e2e8f0'];
+const SLn=ax=>LW*RD.L[1-ax]+6; // distancia centro→línea de pare del eje ax
+function vsync(s){for(let ax=0;ax<2;ax++){
+ for(let k=0;k<s.a[ax];k++){const n=Array(RD.L[ax]).fill(0);vis.forEach(c=>{if(c.ax==ax&&!c.rel)n[c.l]++});
+  vis.push({ax,l:n.indexOf(Math.min(...n)),d:(ax?230:400)-SLn(ax)+20,rel:0,c:CC[VID++%CC.length]})}
+ if(ax==s.p)for(let k=0;k<s.out;k++){const f=vis.filter(c=>c.ax==ax&&!c.rel).sort((a,b)=>a.d-b.d)[0];if(f)f.rel=1}}}
+function vmove(dt){const v=28*dt; // 28 px por segundo simulado
+ for(let ax=0;ax<2;ax++)for(let l=0;l<RD.L[ax];l++)vis.filter(c=>c.ax==ax&&c.l==l&&!c.rel).sort((a,b)=>a.d-b.d).forEach((c,i)=>{c.d=Math.min(c.d,Math.max(c.d-v,6+22*i))});
+ vis.forEach(c=>{if(c.rel)c.d-=v*1.3});vis=vis.filter(c=>c.d>-(c.ax?260:430)-SLn(c.ax))}
+function draw(){const c=$('cv'),x=c.getContext('2d'),W=c.width,H=c.height,s=live,cx=W/2,cy=H/2,n0=RD.L[0],n1=RD.L[1],a0=LW*n0,a1=LW*n1;x.clearRect(0,0,W,H);
+ x.fillStyle='#1b2433';x.fillRect(0,cy-a0,W,2*a0);x.fillRect(cx-a1,0,2*a1,H);
+ x.strokeStyle='#4b5a73';x.lineWidth=1;x.setLineDash([10,10]);x.beginPath(); // separadores de carril
+ for(let i=1;i<n0;i++)for(const y of[cy-i*LW,cy+i*LW]){x.moveTo(0,y);x.lineTo(cx-a1,y);x.moveTo(cx+a1,y);x.lineTo(W,y)}
+ for(let i=1;i<n1;i++)for(const X of[cx-i*LW,cx+i*LW]){x.moveTo(X,0);x.lineTo(X,cy-a0);x.moveTo(X,cy+a0);x.lineTo(X,H)}
+ x.stroke();x.setLineDash([]);x.strokeStyle='#facc15';x.lineWidth=2;x.beginPath(); // eje central
+ x.moveTo(0,cy);x.lineTo(cx-a1,cy);x.moveTo(cx+a1,cy);x.lineTo(W,cy);x.moveTo(cx,0);x.lineTo(cx,cy-a0);x.moveTo(cx,cy+a0);x.lineTo(cx,H);x.stroke();
+ x.strokeStyle='#e6edf7';x.lineWidth=3;x.beginPath();x.moveTo(cx-a1-6,cy);x.lineTo(cx-a1-6,cy+a0);x.moveTo(cx-a1,cy-a0-6);x.lineTo(cx,cy-a0-6);x.stroke(); // líneas de pare
+ const col=i=>s.lost>0?(i==s.p?'#ef4444':'#f59e0b'):(i==s.p?'#22c55e':'#ef4444');
+ [[0,cx-a1-12,cy+a0+16],[1,cx-a1-16,cy-a0-12]].forEach(([i,X,Y])=>{x.fillStyle=col(i);x.shadowColor=col(i);x.shadowBlur=14;x.beginPath();x.arc(X,Y,8,0,7);x.fill();x.shadowBlur=0});
+ vis.forEach(v=>{x.fillStyle=v.c;if(v.ax==0){const X=cx-a1-6-v.d,Y=cy+LW*v.l+LW/2;x.fillRect(X-20,Y-6,20,12);x.fillStyle='rgba(0,0,0,.4)';x.fillRect(X-7,Y-4,4,8)}
+  else{const X=cx-LW*v.l-LW/2,Y=cy-a0-6-v.d;x.fillRect(X-6,Y-20,12,20);x.fillStyle='rgba(0,0,0,.4)';x.fillRect(X-4,Y-7,8,4)}});
+ x.fillStyle='#e6edf7';x.font='13px system-ui';x.fillText(`Av. Javier Prado (EO) · ${n0} carril(es)/sentido · cola ${s.q[0]}`,10,18);x.fillText(`Transversal · ${n1} carril(es)/sentido · cola ${s.q[1]}`,cx+a1+10,40);
+ x.fillStyle='#8ea0bd';x.fillText(`Verde ${s.p?'Transversal':'Javier Prado'}: ${s.g}s / máx ${V('xg')}s${s.lost?'  · ámbar/rojo '+s.lost+'s':''}`,10,H-12);
+ $('k1').textContent=s.t+' s';$('k2').textContent=s.lost?'ÁMBAR':(s.p?'T':'EO');$('k3').textContent=(s.qs/Math.max(1,s.arr)).toFixed(1)+' s';$('k4').textContent=s.mx;line('c1',s.hist)}
+function line(id,a){const c=$(id),x=c.getContext('2d');x.clearRect(0,0,c.width,c.height);if(a.length<2)return;const m=Math.max(5,...a);x.strokeStyle='#38bdf8';x.lineWidth=2;x.beginPath();a.forEach((v,i)=>{const X=i/(a.length-1)*c.width,Y=c.height-4-v/m*(c.height-24);i?x.lineTo(X,Y):x.moveTo(X,Y)});x.stroke();x.fillStyle='#8ea0bd';x.fillText('cola total (máx '+Math.round(m)+')',6,12)}
+function bars(id,v,l){const c=$(id),x=c.getContext('2d');x.clearRect(0,0,c.width,c.height);const m=Math.max(...v),w=c.width/v.length;x.textAlign='center';x.font='13px system-ui';v.forEach((y,i)=>{const h=y/m*(c.height-50);x.fillStyle=['#64748b','#38bdf8','#22c55e','#a78bfa'][i];x.fillRect(i*w+20,c.height-22-h,w-40,h);x.fillStyle='#e6edf7';x.fillText(y.toFixed(1)+' s',i*w+w/2,c.height-26-h);x.fillText(l[i],i*w+w/2,c.height-6)});x.textAlign='left'}
+function loop(ts){const dt=Math.min(.1,(ts-last)/1000);last=ts;if(run){acc+=dt*V('sp');while(acc>=1&&live.t<T){step(live,P());vsync(live);acc--}if(live.t>=T){run=false;$('st').textContent='▶ Iniciar'}}vmove(run?dt*V('sp'):0);draw();requestAnimationFrame(loop)}
+function retrain(){const p=P();ML=trainML(p.k,p.KM);
+ $('ml').innerHTML=`<b>Regresión KNN</b> (k=${p.k}) · MAE hold-out: <b>${ML.mae.toFixed(3)}</b> veh/s<br>`+Object.values(SC).map(s=>`${s.n} (hora ${s.h}, día ${s.d}): predicho [${ML.predict(s.h,s.d).map(v=>v.toFixed(2))}] · real [${s.l}] → perfil <b>${ML.lab[near(ML.predict(s.h,s.d),ML.C)]}</b>`).join('<br>')+`<br><b>K-Means</b> (K=${p.KM}): `+ML.C.map((c,i)=>`${ML.lab[i]} [${c.map(v=>v.toFixed(2))}]`).join(' · ')}
+function alerts(){const p=P(),a=[];
+ if(p.minG>=p.maxG)a.push('Verde mínimo ≥ máximo: el agente no podrá cambiar de fase.');
+ if(p.K<1.1)a.push('K bajo → cambios de fase frecuentes (cada cambio pierde 3 s).');
+ if(p.K>2)a.push('K alto → el reflejo reacciona tarde; la vía débil acumulará cola.');
+ if(p.H<20)a.push('Horizonte A* corto: planificación miope, no amortiza el costo de cambiar.');
+ if(p.H>=50)a.push('Horizonte ≥50 s: hasta ~2000 nodos por decisión → cómputo alto (la corrida masiva tardará).');
+ if(p.k==1)a.push('k=1: sobreajuste al ruido histórico.');if(p.k>12)a.push('k>12: suaviza demasiado las puntas.');
+ if(p.KM<3)a.push('K<3: no se separan Valle / Punta Mañana / Punta Tarde.');if(p.KM>4)a.push('K>4: clústeres redundantes con los mismos 3 perfiles.');
+ if(p.w==0)a.push('Peso ML=0: el híbrido equivale a A* reactivo.');if(p.w==1)a.push('Peso ML=1: ignora la demanda real observada.');
+ if(p.maxG<30)a.push('Verde máximo <30 s: puede empeorar frente al base en punta asimétrica.');
+ $('al').innerHTML=a.length?a.map(t=>`<div class="al">⚠ ${t}</div>`).join(''):'<div class="al ok">✔ Configuración razonable.</div>'}
+function readme(){const rs=Object.keys(RES).map(k=>{const R=RES[k],b=mean(R[0].w);return`### ${SC[k].n}\n\n| Técnica | Espera media (s) | Cola máx. | Cómputo (ms) | Mejora vs base |\n|---|---|---|---|---|\n`+R.map((r,i)=>`| ${MODES[i]} | ${mean(r.w).toFixed(2)} | ${mean(r.m).toFixed(1)} | ${mean(r.c).toFixed(3)} | ${(100*(b-mean(r.w))/b).toFixed(1)}% |`).join('\n')}).join('\n\n')||'_Corre las 30 semillas y vuelve a descargar._',p=P();
+ const t=`# Simulador de Semáforo y Control de Tráfico — Av. Javier Prado\n\nCurso: Agentes Inteligentes · USIL 2026\n\n## Integrantes\n- Renato Paolo Peña Reyna\n- Dylan Mijhael Stefano Cornelio Solis\n- Joaquin Rodrigo Vera Chavez\n\n## Definición del problema\nControlar un cruce crítico de dos ejes (Av. Javier Prado y transversal) para minimizar la espera media por vehículo y la cola máxima. Entorno estocástico (llegadas Poisson), parcialmente observable (colas y llegadas), acciones: mantener/cambiar fase (3 s de pérdida por cambio).\n\n## PEAS\n- **Performance:** espera media, cola máxima, cómputo por decisión.\n- **Environment:** cruce de 2 ejes, 3 escenarios (Valle, Punta simétrica, Punta asimétrica).\n- **Actuators:** mantener fase / cambiar fase.\n- **Sensors:** longitud de cola por eje, llegadas por segundo.\n\n## Técnicas comparadas\n1. Modo base: 30/30 s fijos.\n2. Agente reflejo con estado interno (EMA de llegadas, histéresis K).\n3. Búsqueda A* (costo = espera acumulada, h=0 admisible, horizonte H).\n4. Híbrido basado en utilidad + ML: KNN predice demanda por hora/día, K-Means asigna perfil de tráfico y ambos alimentan la planificación A*.\n\nHiperparámetros usados: verde mín ${p.minG}s, máx ${p.maxG}s, K=${p.K}, H=${p.H}s, k(KNN)=${p.k}, clústeres=${p.KM}, peso ML=${p.w}, avenida=${RD.n}.\n\n## Resultados (30 semillas, mismas llegadas para todos los modos)\n\n${rs}\n\n## Declaración de uso de IA\nSe utilizó Claude (Anthropic) como asistente para generar y refactorizar código y documentación. El equipo revisó, ejecutó y comprende el código y asume la responsabilidad del contenido, conforme a las normas de la USIL.\n`;
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:'text/markdown'}));a.download='README.md';a.click()}
+document.querySelectorAll('input,select').forEach(e=>e.addEventListener('input',()=>{alerts();if(e.id=='kn'||e.id=='km'){retrain();reset()}if(e.id=='sc'||e.id=='md'||e.id=='ln')reset();if(e.id=='sc')table()}));
+$('st').onclick=()=>{run=!run;$('st').textContent=run?'⏸ Pausar':'▶ Iniciar'};$('rs').onclick=()=>{run=false;$('st').textContent='▶ Iniciar';reset()};$('go').onclick=runAll;$('rd').onclick=readme;
+document.querySelectorAll('th[data-k]').forEach(h=>h.onclick=()=>{sortK=h.dataset.k;table()});
+retrain();reset();alerts();requestAnimationFrame(loop);
+</script></body></html>
